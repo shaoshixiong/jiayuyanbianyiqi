@@ -1,0 +1,221 @@
+     1 00000000                                 ; haribote-os boot asm
+     2 00000000                                 ; tab=4
+     3 00000000                                 
+     4 00000000                                 [instrset "i486p"]				; "想要使用486指令"的叙述
+     5 00000000                                 
+     6 00000000                                 ; 絶対に同じ数値を指定しない
+     7  = 00000117                              vbemode1	equ		0x117			; 第1候補 xga16bitカラー
+     8  = 00000105                              vbemode2	equ		0x105			; 第2候補 xga 8bitカラー
+     9 00000000                                 
+    10  = 00280000                              botpak	equ		0x00280000		; bootpackのロード先
+    11  = 00100000                              dskcac	equ		0x00100000		; ディスクキャッシュの場所
+    12  = 00008000                              dskcac0	equ		0x00008000		; ディスクキャッシュの場所（リアルモード）
+    13 00000000                                 
+    14 00000000                                 ; boot_info関係
+    15  = 00000FF0                              cyls	equ		0x0ff0			; 设定启动区
+    16  = 00000FF1                              leds	equ		0x0ff1
+    17  = 00000FF2                              vmode	equ		0x0ff2			; 关于颜色数目的信息，颜色的位数
+    18  = 00000FF4                              scrnx	equ		0x0ff4			; 分辨率的X（screen x）
+    19  = 00000FF6                              scrny	equ		0x0ff6			; 分辨率的Y（screen y）
+    20  = 00000FF8                              vram	equ		0x0ff8			; 图像缓冲区的开始地址
+    21 00000000                                 
+    22                                          		org		0xc200			; 这个程序将要被装载到内存的什么地方呢？
+    23 0000C200                                 
+    24 0000C200                                 ; 画面設定::vbeがあるか
+    25 0000C200 B8 9000                         		mov		ax,0x9000
+    26 0000C203 8E C0                           		mov		es,ax
+    27 0000C205 BF 0000                         		mov		di,0
+    28 0000C208 B8 4F00                         		mov		ax,0x4f00
+    29 0000C20B CD 10                           		int 	0x10
+    30 0000C20D 3D 004F                         		cmp		ax,0x004f
+    31 0000C210 0F 85 0087                      		jne		scrn320
+    32 0000C214                                 
+    33 0000C214                                 ; 画面設定::vbeバージョンチェック
+    34 0000C214 26 8B 45 04                     		mov		ax,[es:di+4]
+    35 0000C218 3D 0200                         		cmp		ax,0x0200
+    36 0000C21B 72 7E                           		jb		scrn320
+    37 0000C21D                                 
+    38 0000C21D                                 ; 画面設定::vbemodeで指定したモードの情報を取得
+    39 0000C21D B9 0117                         		mov		cx,vbemode1				; 第1候補
+    40 0000C220                                 scrn_retry:								; 第2候補はここから
+    41 0000C220 B8 4F01                         		mov		ax,0x4f01
+    42 0000C223 CD 10                           		int		0x10
+    43 0000C225 3D 004F                         		cmp		ax,0x004f
+    44 0000C228 75 4E                           		jne		scrn_next				; 次の候補へ
+    45 0000C22A                                 
+    46 0000C22A                                 ; 画面設定::画面モード情報の確認
+    47 0000C22A 26 8B 05                        		mov		ax,[es:di+0x00]			; 8bit, 16bit 共通チェック項目
+    48 0000C22D 25 0080                         		and		ax,0x0080
+    49 0000C230 74 46                           		jz		scrn_next
+    50 0000C232 89 C8                           		mov		ax,cx
+    51 0000C234 25 0010                         		and		ax,0x0010				; 8ビットカラーか16ビットカラーか調べる
+    52 0000C237 3D 0010                         		cmp		ax,0x0010
+    53 0000C23A 74 4D                           		je		scrn_16bit				; 16ビットの場合はジャンプ
+    54 0000C23C B2 08                           		mov		dl,8					;  8ビットの画面モード確認
+    55 0000C23E 26 80 7D 19 08                  		cmp		byte [es:di+0x19],8
+    56 0000C243 75 33                           		jne		scrn_next
+    57 0000C245 26 80 7D 1B 04                  		cmp		byte [es:di+0x1b],4
+    58 0000C24A 75 2C                           		jne		scrn_next
+    59 0000C24C                                 
+    60 0000C24C                                 ; 画面設定::モード切替
+    61 0000C24C                                 scrn_set:
+    62 0000C24C 81 C1 4000                      		add		cx,0x4000
+    63 0000C250 89 CB                           		mov		bx,cx					;	mov		bx,vbemode1+0x4000
+    64 0000C252 81 E9 4000                      		sub		cx,0x4000
+    65 0000C256 B8 4F02                         		mov		ax,0x4f02
+    66 0000C259 CD 10                           		int		0x10
+    67 0000C25B 88 16 0FF2                      		mov		byte [vmode],dl			; 画面モードをメモする（c言語が参照する）
+    68 0000C25F 26 8B 45 12                     		mov		ax,[es:di+0x12]
+    69 0000C263 A3 0FF4                         		mov		[scrnx],ax
+    70 0000C266 26 8B 45 14                     		mov		ax,[es:di+0x14]
+    71 0000C26A A3 0FF6                         		mov		[scrny],ax
+    72 0000C26D 66 26 8B 45 28                  		mov		eax,[es:di+0x28]
+    73 0000C272 66 A3 0FF8                      		mov		[vram],eax
+    74 0000C276 EB 43                           		jmp		keystatus
+    75 0000C278                                 
+    76 0000C278                                 ; 候補切り替え
+    77 0000C278                                 scrn_next:
+    78 0000C278 81 F9 0117                      		cmp		cx,vbemode1				; 2回目へ
+    79 0000C27C 74 06                           		je		scrn_next1to2
+    80 0000C27E 81 F9 0105                      		cmp		cx,vbemode2				; 2回目もだめなのでscrn320へ
+    81 0000C282 74 17                           		je		scrn320
+    82 0000C284                                 scrn_next1to2:
+    83 0000C284 B9 0105                         		mov		cx,vbemode2
+    84 0000C287 EB 97                           		jmp		scrn_retry
+    85 0000C289                                 
+    86 0000C289                                 ; 16ビットの画面モード確認
+    87 0000C289                                 scrn_16bit:
+    88 0000C289 B2 10                           		mov		dl,16
+    89 0000C28B 26 80 7D 19 10                  		cmp		byte [es:di+0x19],16
+    90 0000C290 75 E6                           		jne		scrn_next
+    91 0000C292 26 80 7D 1B 06                  		cmp		byte [es:di+0x1b],6
+    92 0000C297 75 DF                           		jne		scrn_next
+    93 0000C299 EB B1                           		jmp		scrn_set
+    94 0000C29B                                 
+    95 0000C29B                                 ; 画面設定::vbemodeで指定したモードが使えなかった
+    96 0000C29B                                 scrn320:
+    97 0000C29B B0 13                           		mov		al,0x13					; vgaグラフィックス、320x200x8bitカラー
+    98 0000C29D B4 00                           		mov		ah,0x00
+    99 0000C29F CD 10                           		int		0x10
+   100 0000C2A1 C6 06 0FF2 08                   		mov		byte [vmode],8			; 记录画面模式（参考C语言）
+   101 0000C2A6 C7 06 0FF4 0140                 		mov		word [scrnx],320
+   102 0000C2AC C7 06 0FF6 00C8                 		mov		word [scrny],200
+   103 0000C2B2 66 C7 06 0FF8 000A0000          		mov		dword [vram],0x000a0000
+   104 0000C2BB                                 
+   105 0000C2BB                                 ; 用BIOS取得键盘上各种LED指示灯的状态
+   106 0000C2BB                                 keystatus:
+   107 0000C2BB B4 02                           		mov		ah,0x02
+   108 0000C2BD CD 16                           		int		0x16 			; keyboard bios
+   109 0000C2BF A2 0FF1                         		mov		[leds],al
+   110 0000C2C2                                 
+   111 0000C2C2                                 ; picが一切の割り込みを受け付けないようにする
+   112 0000C2C2                                 ;	at互換機の仕様では、picの初期化をするなら、
+   113 0000C2C2                                 ;	こいつをcli前にやっておかないと、たまにハングアップする
+   114 0000C2C2                                 ;	picの初期化はあとでやる
+   115 0000C2C2                                 
+   116 0000C2C2 B0 FF                           		mov		al,0xff
+   117 0000C2C4 E6 21                           		out		0x21,al
+   118 0000C2C6 90                              		nop						; out命令を連続させるとうまくいかない機種があるらしいので
+   119 0000C2C7 E6 A1                           		out		0xa1,al
+   120 0000C2C9                                 
+   121 0000C2C9 FA                              		cli						; さらにcpuレベルでも割り込み禁止
+   122 0000C2CA                                 
+   123 0000C2CA                                 ; 为了让CPU能够访问1MB以上的内存空间，设定 A20GATE
+   124 0000C2CA                                 
+   125 0000C2CA E8 00B5                         		call	waitkbdout
+   126 0000C2CD B0 D1                           		mov		al,0xd1
+   127 0000C2CF E6 64                           		out		0x64,al
+   128 0000C2D1 E8 00AE                         		call	waitkbdout
+   129 0000C2D4 B0 DF                           		mov		al,0xdf			; enable a20
+   130 0000C2D6 E6 60                           		out		0x60,al
+   131 0000C2D8 E8 00A7                         		call	waitkbdout
+   132 0000C2DB                                 
+   133 0000C2DB                                 ; 切换到保护模式
+   134 0000C2DB                                 
+   135 0000C2DB                                 
+   136 0000C2DB 0F 01 16 C3BA                   		lgdt	[gdtr0]			; 设定临时GDT
+   137 0000C2E0 0F 20 C0                        		mov		eax,cr0
+   138 0000C2E3 66 25 7FFFFFFF                  		and		eax,0x7fffffff	; 设bit31为0 （为了禁止颁）
+   139 0000C2E9 66 83 C8 01                     		or		eax,0x00000001	; 设bit0为1 （为了切换到保护模式）
+   140 0000C2ED 0F 22 C0                        		mov		cr0,eax
+   141 0000C2F0 EB 00                           		jmp		pipelineflash
+   142 0000C2F2                                 pipelineflash:
+   143 0000C2F2 B8 0008                         		mov		ax,1*8			;  可读写的段32bit
+   144 0000C2F5 8E D8                           		mov		ds,ax
+   145 0000C2F7 8E C0                           		mov		es,ax
+   146 0000C2F9 8E E0                           		mov		fs,ax
+   147 0000C2FB 8E E8                           		mov		gs,ax
+   148 0000C2FD 8E D0                           		mov		ss,ax
+   149 0000C2FF                                 
+   150 0000C2FF                                 ; bootpack的转送
+   151 0000C2FF                                 
+   152 0000C2FF 66 BE 0000C3C0                  		mov		esi,bootpack	; 转送源	
+   153 0000C305 66 BF 00280000                  		mov		edi,botpak		; 转送目的地
+   154 0000C30B 66 B9 00020000                  		mov		ecx,512*1024/4
+   155 0000C311 E8 0075                         		call	memcpy
+   156 0000C314                                 
+   157 0000C314                                 ;磁盘数据最终转送到它本来的位置去
+   158 0000C314                                 ;首先从启动扇区开始
+   159 0000C314                                 
+   160 0000C314 66 BE 00007C00                  		mov		esi,0x7c00		; 转送源
+   161 0000C31A 66 BF 00100000                  		mov		edi,dskcac		; 转送目的地
+   162 0000C320 66 B9 00000080                  		mov		ecx,512/4
+   163 0000C326 E8 0060                         		call	memcpy
+   164 0000C329                                 
+   165 0000C329                                 ; 所有剩下的
+   166 0000C329                                 
+   167 0000C329 66 BE 00008200                  		mov		esi,dskcac0+512	; 转送源
+   168 0000C32F 66 BF 00100200                  		mov		edi,dskcac+512	; 转送目的地
+   169 0000C335 66 B9 00000000                  		mov		ecx,0
+   170 0000C33B 8A 0E 0FF0                      		mov		cl,byte [cyls]
+   171 0000C33F 66 69 C9 00001200               		imul	ecx,512*18*2/4	; 从柱面数字变换为字节数/4
+   172 0000C346 66 81 E9 00000080               		sub		ecx,512/4		; 减去 IPL
+   173 0000C34D E8 0039                         		call	memcpy
+   174 0000C350                                 
+   175 0000C350                                 ; 必须由asmhead来完成的工作，至此全部完毕
+   176 0000C350                                 ; 以后就交由bootpack来完成
+   177 0000C350                                 	
+   178 0000C350                                 ; bootpackの起動
+   179 0000C350                                 
+   180 0000C350 66 BB 00280000                  		mov		ebx,botpak
+   181 0000C356 67 66 8B 4B 10                  		mov		ecx,[ebx+16]
+   182 0000C35B 66 83 C1 03                     		add		ecx,3			; ecx += 3;
+   183 0000C35F 66 C1 E9 02                     		shr		ecx,2			; ecx /= 4;
+   184 0000C363 74 10                           		jz		skip			; 没有要转送的东西时
+   185 0000C365 67 66 8B 73 14                  		mov		esi,[ebx+20]	; 转送源
+   186 0000C36A 66 01 DE                        		add		esi,ebx
+   187 0000C36D 67 66 8B 7B 0C                  		mov		edi,[ebx+12]	; 转送目的地
+   188 0000C372 E8 0014                         		call	memcpy
+   189 0000C375                                 skip:
+   190 0000C375 67 66 8B 63 0C                  		mov		esp,[ebx+12]	; 栈初始值
+   191 0000C37A 66 EA 0000001B 0010             		jmp		dword 2*8:0x0000001b
+   192 0000C382                                 
+   193 0000C382                                 waitkbdout:
+   194 0000C382 E4 64                           		in		 al,0x64
+   195 0000C384 24 02                           		and		 al,0x02
+   196 0000C386 75 FA                           		jnz		waitkbdout		; AND的结果如果不是0，就跳到waitkbdout
+   197 0000C388 C3                              		ret
+   198 0000C389                                 
+   199 0000C389                                 memcpy:
+   200 0000C389 67 66 8B 06                     		mov		eax,[esi]
+   201 0000C38D 66 83 C6 04                     		add		esi,4
+   202 0000C391 67 66 89 07                     		mov		[edi],eax
+   203 0000C395 66 83 C7 04                     		add		edi,4
+   204 0000C399 66 83 E9 01                     		sub		ecx,1
+   205 0000C39D 75 EA                           		jnz		memcpy			; 减法运算的结果如果不是0，就跳转到memcpy
+   206 0000C39F C3                              		ret
+   207 0000C3A0                                 ; memcpyはアドレスサイズプリフィクスを入れ忘れなければ、ストリング命令でも書ける
+   208 0000C3A0                                 
+   209 0000C3A0                                 		alignb	16
+   210 0000C3A0                                 gdt0:
+   211 0000C3A0 00 00 00 00 00 00 00 00         		resb	8				; NULL selector
+   212 0000C3A8 FFFF 0000 9200 00CF             		dw		0xffff,0x0000,0x9200,0x00cf	;可以读写的段 （segment） 32bit
+   213 0000C3B0 FFFF 0000 9A28 0047             		dw		0xffff,0x0000,0x9a28,0x0047	;可以执行的段 （segment） 32bit (bootpack用)
+   214 0000C3B8                                 
+   215 0000C3B8 0000                            		dw		0
+   216 0000C3BA                                 gdtr0:
+   217 0000C3BA 0017                            		dw		8*3-1
+   218 0000C3BC 0000C3A0                        		dd		gdt0
+   219 0000C3C0                                 
+   220 0000C3C0                                 		alignb	16
+   221 0000C3C0                                 bootpack:

@@ -1,0 +1,6 @@
+G:\Y2\asp.net\MvcTest20130404\Test\汇编编译器\bin\Debug\汇编编译器.exe.config
+G:\Y2\asp.net\MvcTest20130404\Test\汇编编译器\bin\Debug\汇编编译器.exe
+G:\Y2\asp.net\MvcTest20130404\Test\汇编编译器\bin\Debug\汇编编译器.pdb
+G:\Y2\asp.net\MvcTest20130404\Test\汇编编译器\obj\Debug\汇编编译器.exe
+G:\Y2\asp.net\MvcTest20130404\Test\汇编编译器\obj\Debug\汇编编译器.pdb
+G:\Y2\asp.net\MvcTest20130404\Test\汇编编译器\obj\Debug\汇编编译器.csprojResolveAssemblyReference.cache
