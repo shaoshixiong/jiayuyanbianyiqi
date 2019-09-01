@@ -42,7 +42,7 @@ namespace 汇编编译器
             dic.Add("8B 54 24 04   ", "MOV EDX,[ESP+4]");
             dic.Add("8A 44 24 08   ", "MOV AL,[ESP+8] ");
             dic.Add("EE", "OUT DX,AL");
-            dic.Add("C3", "RET ");
+            dic.Add("C3", "RET");
 
             dic.Add("8B 54 24 04   ", "MOV EDX,[ESP+4]");
             dic.Add("8B 44 24 08   ", "MOV EAX,[ESP+8] ");
